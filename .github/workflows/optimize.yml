@@ -7,8 +7,6 @@ on:
         description: Dashboard optimisation job ID
         required: true
         type: string
-  repository_dispatch:
-    types: [optimize_empire]
 
 concurrency:
   group: bdo-empire-optimizer
@@ -16,15 +14,15 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   optimize:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
-      DASHBOARD_RUNNER_SECRET: ${{ secrets.DASHBOARD_RUNNER_SECRET }}
-      JOB_ID: ${{ inputs.job_id || github.event.client_payload.job_id }}
+      DASHBOARD_URL: https://bdo-worker-empire.mite-suaver0v.chatgpt.site
+      JOB_ID: ${{ inputs.job_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
