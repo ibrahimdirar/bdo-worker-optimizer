@@ -1,0 +1,45 @@
+name: Generate BDO worker empire
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Dashboard optimisation job ID
+        required: true
+        type: string
+  repository_dispatch:
+    types: [optimize_empire]
+
+concurrency:
+  group: bdo-empire-optimizer
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+      DASHBOARD_RUNNER_SECRET: ${{ secrets.DASHBOARD_RUNNER_SECRET }}
+      JOB_ID: ${{ inputs.job_id || github.event.client_payload.job_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install optimiser
+        run: pip install bdo-empire==0.8.2
+      - name: Solve empire
+        run: python runner.py
+      - name: Preserve result for diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimized-empire-${{ env.JOB_ID }}
+          path: optimized_empire.json
+          if-no-files-found: ignore
+          retention-days: 7
