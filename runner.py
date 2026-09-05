@@ -4,7 +4,8 @@ from pathlib import Path
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from bdo_empire.generate_graph_data import generate_graph_data
-from bdo_empire.generate_reference_data import generate_reference_data
+from bdo_empire.generate_reference_data import generate_reference_data, update_workerman_data
+import bdo_empire.data_store as ds
 from bdo_empire.generate_workerman_data import generate_workerman_data
 from bdo_empire.main import lodging_specifications, optimize_config, solver_config
 from bdo_empire.optimize_highspy import optimize
@@ -41,9 +42,15 @@ def main():
  for town,values in job.get("lodging",{}).items():
   if town in lodging: lodging[town].update(values)
  prices=live_prices(job)
+ priced_count=len(prices)
+ update_workerman_data()
+ required={int(item) for drop in ds.read_json("plantzone_drops.json").values() for group in ("lucky","unlucky","unlucky_gi") for item in drop.get(group,{})}
+ missing=sorted(required-set(prices))
+ for item in missing: prices[item]=0
+ print(f"Market coverage: {len(required)-len(missing)}/{len(required)} drop items; missing items valued at zero: {missing}",flush=True)
  data=generate_reference_data(config,prices,job.get("modifiers",{}),lodging,job.get("forcedNodeIds",[])); data=generate_graph_data(data); data["base_empire"]=job.get("baseEmpire") if job.get("lockCurrentEmpire") else None
  result=generate_workerman_data(optimize(data,SolverController()),lodging,data)
- output={"empire":result,"pricing":{"source":"bdolytics","region":job.get("region","EU"),"pricedItems":len(prices),"tax":job.get("marketTax",0.845)}}
+ output={"empire":result,"pricing":{"source":"bdolytics","region":job.get("region","EU"),"pricedItems":priced_count,"missingItemIds":missing,"requiredDropItems":len(required),"tax":job.get("marketTax",0.845)}}
  Path("optimized_empire.json").write_text(json.dumps(output,indent=2))
  api(f"/api/optimizer/jobs/{JOB}/result",{"status":"completed",**output})
 
