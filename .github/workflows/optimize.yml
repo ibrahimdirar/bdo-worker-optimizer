@@ -31,6 +31,8 @@ jobs:
       - name: Install optimiser
         run: pip install bdo-empire==0.8.2
       - name: Solve empire
+        env:
+          BDO_SITES_API_TOKEN: ${{ secrets.BDO_SITES_API_TOKEN }}
         run: python runner.py
       - name: Preserve result for diagnostics
         if: always()
