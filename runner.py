@@ -103,6 +103,65 @@ def live_prices(job, drops):
  diagnostics["region"]=region
  return prices,diagnostics
 
+def export_solution(solved,lodging,data):
+ """Preserve solved infrastructure and model evidence alongside the Workerman export."""
+ from collections import Counter
+ from importlib.metadata import version
+ import rustworkx as rx
+ from bdo_empire.generate_workerman_data import generate_graph, generate_workerman_workers, generate_workerman_json, print_summary
+ model,variables=solved
+ graph,assignments=generate_graph(data["solver_graph"],model,variables,data)
+ workers=generate_workerman_workers(graph,assignments,data)
+ empire=generate_workerman_json(workers,data,lodging)
+ print_summary(graph,assignments,lodging,workers,model,variables,data)
+ real={t:r for t,r in assignments.items() if not graph[t].get("is_super_terminal")}
+ counts=Counter(real.values())
+ def key(i): return int(graph[i]["waypoint_key"])
+ def node(i):
+  k=key(i)
+  return {"id":k,"name":str(data["exploration_strings"].get(k,k)),
+          "cp":float(graph[i].get("need_exploration_point",0)),
+          "kind":"production" if i in real else "connection"}
+ towns=[]
+ for root,count in sorted(counts.items()):
+  region=graph[root]["region_key"]
+  name=str(data["region_strings"].get(region,region))
+  spec=lodging.get(name,{})
+  towns.append({"id":key(root),"name":name,"workers":count,
+    "lodgingCp":float(graph[root]["capacity_cost"][count]),
+    "bonus":spec.get("bonus",0),"reserved":spec.get("reserved",0),"prepaid":spec.get("prepaid",0)})
+ routes=[]
+ for terminal,root in real.items():
+  path=rx.dijkstra_shortest_paths(graph,terminal,root,default_weight=1)[root]
+  routes.append({"townId":key(root),"nodeId":key(terminal),
+    "nodeIds":[key(i) for i in reversed(path)]})
+ nodes=[node(i) for i in graph.node_indices()]
+ cp={"lodging":sum(t["lodgingCp"] for t in towns),
+     "production":sum(n["cp"] for n in nodes if n["kind"]=="production"),
+     "connections":sum(n["cp"] for n in nodes if n["kind"]=="connection")}
+ cp["total"]=sum(cp.values())
+ info=model.getInfo()
+ def finite(value):
+  try: return float(value) if isfinite(float(value)) else None
+  except (TypeError,ValueError): return None
+ quality={"status":model.modelStatusToString(model.getModelStatus()),
+          "relativeGap":finite(info.mip_gap),"objective":finite(model.getObjectiveValue()),
+          "dualBound":finite(info.mip_dual_bound),"seconds":finite(model.getRunTime())}
+ solution={"schemaVersion":1,"optimizerVersion":version("bdo-empire"),
+   "towns":towns,"nodes":nodes,"routes":routes,"cp":cp,"quality":quality,
+   "estimatedDailySilver":sum(float(w["label"]) for w in workers),
+   "constraints":{"budget":data["config"]["budget"],
+     "topTownsPerNode":data["config"].get("top_n"),
+     "nearestTransitTowns":data["config"].get("nearest_n"),
+     "forcedNodeIds":data.get("force_active_node_ids",[]),
+     "lockedCurrentEmpire":data.get("base_empire") is not None},
+   "assumptions":{"workerLevel":40,"skills":"Upstream optimised worker skills",
+     "storage":"Workerman export uses a fixed storage placeholder; logistics not optimised.",
+     "lodging":"Capacity and CP cost only; individual house purchases are not solver decisions.",
+     "routes":"Paths through the upstream postprocessed solution graph; shared CP counted once.",
+     "optimality":"Solver gap applies to the configured model and candidate restrictions, not all possible real-game empires."}}
+ return empire,solution
+
 def main():
  if not os.environ.get("BDO_SITES_API_TOKEN"):
   raise RuntimeError("Missing Actions secret BDO_SITES_API_TOKEN. Complete dashboard /runner-setup before running.")
@@ -115,8 +174,9 @@ def main():
  prices,pricing=live_prices(job,ds.read_json("plantzone_drops.json"))
  print(f"Pricing coverage: {pricing['resolvedDropItems']}/{pricing['requiredDropItems']}; unresolved zero fallbacks: {pricing['missingItemIds']}",flush=True)
  data=generate_reference_data(config,prices,job.get("modifiers",{}),lodging,job.get("forcedNodeIds",[])); data=generate_graph_data(data); data["base_empire"]=job.get("baseEmpire") if job.get("lockCurrentEmpire") else None
- result=generate_workerman_data(optimize(data,SolverController()),lodging,data)
- output={"empire":result,"pricing":pricing}
+ solved=optimize(data,SolverController())
+ result,solution=export_solution(solved,lodging,data)
+ output={"empire":result,"pricing":pricing,"solution":solution}
  Path("optimized_empire.json").write_text(json.dumps(output,indent=2))
  api(f"/api/optimizer/jobs/{JOB}/result",{"status":"completed",**output})
 
