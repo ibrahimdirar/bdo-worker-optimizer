@@ -17,7 +17,9 @@ def oidc():
  with urlopen(req) as r:return json.load(r)["value"]
 
 def api(path,payload=None):
- req=Request(BASE+path,data=None if payload is None else json.dumps(payload).encode(),headers={"X-GitHub-OIDC":oidc(),"Content-Type":"application/json"})
+ body=dict(payload or {})
+ body["_runnerToken"]=oidc()
+ req=Request(BASE+path,data=json.dumps(body).encode(),headers={"Content-Type":"application/json"},method="POST")
  with urlopen(req,timeout=120) as r:return json.load(r)
 
 def live_prices(job):
@@ -31,7 +33,7 @@ def live_prices(job):
  return prices
 
 def main():
- job=api(f"/api/optimizer/jobs/{JOB}/input")
+ job=api(f"/api/optimizer/jobs/{JOB}/input",{})
  config=deepcopy(optimize_config); config["budget"]=int(job.get("cpBudget",300)); config["solver"]=deepcopy(solver_config); config["solver"]["time_limit"]=int(job.get("timeLimitSeconds",7200)); config["solver"]["mip_improvement_timeout"]=int(job.get("improvementTimeoutSeconds",900))
  lodging=deepcopy(lodging_specifications)
  for town,values in job.get("lodging",{}).items():
