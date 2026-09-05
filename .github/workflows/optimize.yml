@@ -30,6 +30,8 @@ jobs:
           python-version: '3.12'
       - name: Install optimiser
         run: pip install bdo-empire==0.8.2
+      - name: Verify pricing and solution export
+        run: python -m unittest test_pricing test_solution -v
       - name: Solve empire
         env:
           BDO_SITES_API_TOKEN: ${{ secrets.BDO_SITES_API_TOKEN }}
