@@ -19,7 +19,7 @@ def oidc():
 def api(path,payload=None):
  body=dict(payload or {})
  body["_runnerToken"]=oidc()
- req=Request(BASE+path,data=json.dumps(body).encode(),headers={"Content-Type":"application/json"},method="POST")
+ req=Request(BASE+path,data=json.dumps(body).encode(),headers={"Content-Type":"application/json","OAI-Sites-Authorization":"Bearer "+os.environ["BDO_SITES_API_TOKEN"]},method="POST")
  with urlopen(req,timeout=120) as r:return json.load(r)
 
 def live_prices(job):
@@ -33,6 +33,8 @@ def live_prices(job):
  return prices
 
 def main():
+ if not os.environ.get("BDO_SITES_API_TOKEN"):
+  raise RuntimeError("Missing Actions secret BDO_SITES_API_TOKEN. Complete dashboard /runner-setup before running.")
  job=api(f"/api/optimizer/jobs/{JOB}/input",{})
  config=deepcopy(optimize_config); config["budget"]=int(job.get("cpBudget",300)); config["solver"]=deepcopy(solver_config); config["solver"]["time_limit"]=int(job.get("timeLimitSeconds",7200)); config["solver"]["mip_improvement_timeout"]=int(job.get("improvementTimeoutSeconds",900))
  lodging=deepcopy(lodging_specifications)
@@ -48,5 +50,9 @@ def main():
 if __name__=="__main__":
  try:main()
  except Exception as exc:
-  try:api(f"/api/optimizer/jobs/{JOB}/result",{"status":"failed","error":str(exc)[:1000]})
-  finally:raise
+  try:
+   if os.environ.get("BDO_SITES_API_TOKEN"):
+    api(f"/api/optimizer/jobs/{JOB}/result",{"status":"failed","error":str(exc)[:1000]})
+  except Exception:
+   print("Could not report failure to dashboard; the original exception follows.")
+  raise
