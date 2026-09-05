@@ -37,7 +37,7 @@ def main():
  if not os.environ.get("BDO_SITES_API_TOKEN"):
   raise RuntimeError("Missing Actions secret BDO_SITES_API_TOKEN. Complete dashboard /runner-setup before running.")
  job=api(f"/api/optimizer/jobs/{JOB}/input",{})
- config=deepcopy(optimize_config); config["budget"]=int(job.get("cpBudget",300)); config["solver"]=deepcopy(solver_config); config["solver"]["time_limit"]=int(job.get("timeLimitSeconds",7200)); config["solver"]["mip_improvement_timeout"]=int(job.get("improvementTimeoutSeconds",900))
+ config=deepcopy(optimize_config); config["budget"]=int(job.get("cpBudget",300)); config["solver_config"]=deepcopy(solver_config); config["solver_config"]["time_limit"]=int(job.get("timeLimitSeconds",7200)); config["solver_config"]["mip_improvement_timeout"]=int(job.get("improvementTimeoutSeconds",900))
  lodging=deepcopy(lodging_specifications)
  for town,values in job.get("lodging",{}).items():
   if town in lodging: lodging[town].update(values)
