@@ -17,7 +17,7 @@ def oidc():
  with urlopen(req) as r:return json.load(r)["value"]
 
 def api(path,payload=None):
- req=Request(BASE+path,data=None if payload is None else json.dumps(payload).encode(),headers={"Authorization":"Bearer "+oidc(),"Content-Type":"application/json"})
+ req=Request(BASE+path,data=None if payload is None else json.dumps(payload).encode(),headers={"X-GitHub-OIDC":oidc(),"Content-Type":"application/json"})
  with urlopen(req,timeout=120) as r:return json.load(r)
 
 def live_prices(job):
